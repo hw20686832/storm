@@ -4,18 +4,22 @@ from __future__ import print_function
 
 from operator import itemgetter
 import re
+from shutil import copyfile
 
 from .parsers.ssh_config_parser import ConfigParser
 from .defaults import get_default
 
 
-__version__ = '0.6.5'
+__version__ = '0.6.9'
 
 ERRORS = {
-    "already_in": "{0} is already in your sshconfig. use storm edit or storm update to modify.",
-    "not_found": "{0} doesn\'t exists in your sshconfig. use storm add command to add.",
+    "already_in": "{0} is already in your sshconfig. "
+                  "use storm edit or storm update to modify.",
+    "not_found": "{0} doesn\'t exists in your sshconfig. "
+                 "use storm add command to add.",
 }
 
+DELETED_SIGN = "DELETED"
 
 
 class Storm(object):
@@ -36,17 +40,19 @@ class Storm(object):
 
         return True
 
-    
-    def clone_entry(self, name, clone_name):
+    def clone_entry(self, name, clone_name, keep_original=True):
         host = self.is_host_in(name, return_match=True)
         if not host:
             raise ValueError(ERRORS["not_found"].format(name))
 
         # check if an entry with the clone name already exists        
-        if name == clone_name or self.is_host_in(clone_name, return_match=True) is not None:
+        if name == clone_name \
+                or self.is_host_in(clone_name, return_match=True) is not None:
             raise ValueError(ERRORS["already_in"].format(clone_name))
        
         self.ssh_config.add_host(clone_name, host.get('options'))
+        if not keep_original:
+            self.ssh_config.delete_host(name)
         self.ssh_config.write_to_ssh_config()
 
         return True
@@ -56,7 +62,6 @@ class Storm(object):
             raise ValueError(ERRORS["not_found"].format(name))
 
         options = self.get_options(host, user, port, id_file, custom_options)
-
         self.ssh_config.update_host(name, options, use_regex=False)
         self.ssh_config.write_to_ssh_config()
 
@@ -105,9 +110,15 @@ class Storm(object):
         for host_entry in results:
             formatted_results.append("    {0} -> {1}@{2}:{3}\n".format(
                 host_entry.get("host"),
-                host_entry.get("options").get("user", get_default("user", self.defaults)),
-                host_entry.get("options").get("hostname", "[hostname_not_specified]"),
-                host_entry.get("options").get("port", get_default("port", self.defaults)),
+                host_entry.get("options").get(
+                    "user", get_default("user", self.defaults)
+                ),
+                host_entry.get("options").get(
+                    "hostname", "[hostname_not_specified]"
+                ),
+                host_entry.get("options").get(
+                    "port", get_default("port", self.defaults)
+                ),
             ))
 
         return formatted_results
@@ -119,10 +130,13 @@ class Storm(object):
             'port': port,
         }
 
-        if id_file:
-            options.update({
-                'identityfile': id_file,
-            })
+        if id_file == DELETED_SIGN:
+            options['deleted_fields'] = ["identityfile"]
+        else:
+            if id_file:
+                options.update({
+                    'identityfile': id_file,
+                })
 
         if len(custom_options) > 0:
             for custom_option in custom_options:
@@ -130,13 +144,26 @@ class Storm(object):
                     key, value = custom_option.split("=")
 
                     options.update({
-                        key.lower() : value,
+                        key.lower(): value,
                     })
+        options = self._quote_options(options)
 
         return options
 
     def is_host_in(self, host, return_match = False, regexp_match=False):
         for host_ in self.ssh_config.config_data:
-            if host_.get("host") == host or (regexp_match and re.match(host, host_.get("host"))):
+            if host_.get("host") == host\
+                    or (regexp_match and re.match(host, host_.get("host"))):
                 return True if not return_match else host_
         return False if not return_match else None
+
+    def backup(self, target_file):
+        return copyfile(self.ssh_config.ssh_config_file, target_file)
+
+    def _quote_options(self, options):
+        keys_should_be_quoted = ["identityfile", ]
+        for key in keys_should_be_quoted:
+            if key in options:
+                options[key] = '"{0}"'.format(options[key].strip('"'))
+
+        return options

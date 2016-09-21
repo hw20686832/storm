@@ -50,10 +50,12 @@ def add(name, connection_uri, id_file="", o=[], config=None):
 
         storm_.add_entry(name, host, user, port, id_file, o)
 
-        print(get_formatted_message('{0} added to your ssh config. you can connect it by typing "ssh {0}".'.format(
-
-            name
-        ), 'success'))
+        print(
+            get_formatted_message(
+                '{0} added to your ssh config. you can connect '
+                'it by typing "ssh {0}".'.format(name),
+            'success')
+        )
 
     except ValueError as error:
         print(get_formatted_message(error, 'error'), file=sys.stderr)
@@ -74,9 +76,38 @@ def clone(name, clone_name, config=None):
 
         storm_.clone_entry(name, clone_name)
 
-        print(get_formatted_message('{0} added to your ssh config. you can connect it by typing "ssh {0}".'.format(
-            clone_name
-        ), 'success'))
+        print(
+            get_formatted_message(
+                '{0} added to your ssh config. you can connect '
+                'it by typing "ssh {0}".'.format(clone_name),
+            'success')
+        )
+
+    except ValueError as error:
+        print(get_formatted_message(error, 'error'), file=sys.stderr)
+
+@command('move')
+def move(name, entry_name, config=None):
+    """
+    Move an entry to the sshconfig.
+    """
+    storm_ = get_storm_instance(config)
+
+    try:
+
+        if '@' in name:
+            raise ValueError('invalid value: "@" cannot be used in name.')
+
+        storm_.clone_entry(name, entry_name, keep_original=False)
+
+        print(
+            get_formatted_message(
+                '{0} moved in ssh config. you can '
+                'connect it by typing "ssh {0}".'.format(
+                    entry_name
+                ),
+            'success')
+        )
 
     except ValueError as error:
         print(get_formatted_message(error, 'error'), file=sys.stderr)
@@ -110,7 +141,8 @@ def edit(name, connection_uri, id_file="", o=[], config=None):
 @command('update')
 def update(name, connection_uri="", id_file="", o=[], config=None):
     """
-    Enhanced version of the edit command featuring multiple edits using regular expressions to match entries
+    Enhanced version of the edit command featuring multiple
+    edits using regular expressions to match entries
     """
     storm_ = get_storm_instance(config)
     settings = {}
@@ -140,7 +172,11 @@ def delete(name, config=None):
 
     try:
         storm_.delete_entry(name)
-        print(get_formatted_message('hostname "{0}" deleted successfully.'.format(name), 'success'))
+        print(
+            get_formatted_message(
+                'hostname "{0}" deleted successfully.'.format(name),
+            'success')
+        )
     except ValueError as error:
         print(get_formatted_message(error, 'error'), file=sys.stderr)
 
@@ -160,9 +196,15 @@ def list(config=None):
                 if not host.get("host") == "*":
                     result += "    {0} -> {1}@{2}:{3}".format(
                         colored(host["host"], 'green', attrs=["bold", ]),
-                        host.get("options").get("user", get_default("user", storm_.defaults)),
-                        host.get("options").get("hostname", "[hostname_not_specified]"),
-                        host.get("options").get("port", get_default("port", storm_.defaults))
+                        host.get("options").get(
+                            "user", get_default("user", storm_.defaults)
+                        ),
+                        host.get("options").get(
+                            "hostname", "[hostname_not_specified]"
+                        ),
+                        host.get("options").get(
+                            "port", get_default("port", storm_.defaults)
+                        )
                     )
 
                     extra = False
@@ -170,7 +212,9 @@ def list(config=None):
 
                         if not key in ["user", "hostname", "port"]:
                             if not extra:
-                                custom_options = colored('\n\t[custom options] ', 'white')
+                                custom_options = colored(
+                                    '\n\t[custom options] ', 'white'
+                                )
                                 result += " {0}".format(custom_options)
                             extra = True
 
@@ -184,10 +228,14 @@ def list(config=None):
 
                     result += "\n\n"
                 else:
-                    result_stack = colored("   (*) General options: \n", "green", attrs=["bold",])
+                    result_stack = colored(
+                        "   (*) General options: \n", "green", attrs=["bold",]
+                    )
                     for key, value in six.iteritems(host.get("options")):
                         if isinstance(value, type([])):
-                            result_stack += "\t  {0}: ".format(colored(key, "magenta"))
+                            result_stack += "\t  {0}: ".format(
+                                colored(key, "magenta")
+                            )
                             result_stack += ', '.join(value)
                             result_stack += "\n"
                         else:
@@ -234,14 +282,25 @@ def delete_all(config=None):
     except Exception as error:
         print(get_formatted_message(str(error), 'error'), file=sys.stderr)
 
+@command('backup')
+def backup(target_file, config=None):
+    """
+    Backups the main ssh configuration into target file.
+    """
+    storm_ = get_storm_instance(config)
+    try:
+        storm_.backup(target_file)
+    except Exception as error:
+        print(get_formatted_message(str(error), 'error'), file=sys.stderr)
 
 @command('web')
 @arg('port', nargs='?', default=9002, type=int)
+@arg('theme', nargs='?', default="modern", choices=['modern', 'black', 'storm'])
 @arg('debug', action='store_true', default=False)
-def web(port, debug=False, ssh_config=None):
+def web(port, debug=False, theme="modern", ssh_config=None):
     """Starts the web UI."""
     from storm import web as _web
-    _web.run(port, debug, ssh_config)
+    _web.run(port, debug, theme, ssh_config)
 
 
 if __name__ == '__main__':

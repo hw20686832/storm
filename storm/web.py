@@ -4,18 +4,22 @@ import os.path
 from flask import (Flask, Response, make_response, jsonify, request,
                    send_from_directory)
 
-from storm import Storm
+from storm import Storm, DELETED_SIGN
 from storm.parsers.ssh_uri_parser import parse
 
 
 app = Flask(__name__)
+__THEME__ = "modern"
 
 
-def render(template):
+def render(template, theme):
     static_dir = os.path.dirname(os.path.abspath(__file__))
     path = os.path.join(static_dir, 'templates', template)
     with open(path) as fobj:
         content = fobj.read()
+
+    content = content.replace('__THEME__', request.args.get('theme', theme))
+
     return make_response(content)
 
 
@@ -25,8 +29,7 @@ def response(resp=None, status=200, content_type='application/json'):
 
 @app.route('/')
 def index():
-    return render('index.html')
-
+    return render('index.html', __THEME__)
 
 @app.route('/list', methods=['GET'])
 def list_keys():
@@ -41,10 +44,9 @@ def add():
     try:
         name = request.json['name']
         connection_uri = request.json['connection_uri']
+        id_file = None
         if 'id_file' in request.json:
             id_file = request.json['id_file']
-        else:
-            id_file = ''
 
         if '@' in name:
             msg = 'invalid value: "@" cannot be used in name.'
@@ -66,10 +68,11 @@ def edit():
     try:
         name = request.json['name']
         connection_uri = request.json['connection_uri']
+        id_file = None
         if 'id_file' in request.json:
             id_file = request.json['id_file']
-        else:
-            id_file = ''
+            if id_file == '':
+                id_file = DELETED_SIGN
 
         user, host, port = parse(connection_uri)
         storm_.edit_entry(name, host, user, port, id_file)
@@ -101,12 +104,11 @@ def favicon():
                                mimetype='image/vnd.microsoft.icon')
 
 
-def run(port, debug, ssh_config=None):
+def run(port, debug, theme, ssh_config=None):
+    global __THEME__
     port = int(port)
     debug = bool(debug)
-
-    # in order to make web interface testable, ssh_config_file should be an argument.
-    # is there a better way?
+    __THEME__ = theme
 
     def get_storm():
         return Storm(ssh_config)

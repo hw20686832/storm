@@ -12,7 +12,6 @@ from paramiko.config import SSHConfig
 import six
 
 
-
 class StormConfig(SSHConfig):
     def parse(self, file_obj):
         """
@@ -66,11 +65,13 @@ class StormConfig(SSHConfig):
             if key == 'host':
                 self._config.append(host)
                 value = value.split()
-                host = {key: value, 'config': {}, 'type': 'entry', 'order': order}
+                host = {
+                    key: value,
+                    'config': {},
+                    'type': 'entry',
+                    'order': order
+                }
                 order += 1
-            #identityfile is a special case, since it is allowed to be
-            # specified multiple times and they should be tried in order
-            # of specification.
             elif key in ['identityfile', 'localforward', 'remoteforward']:
                 if key in host['config']:
                     host['config'][key].append(value)
@@ -123,7 +124,7 @@ class ConfigParser(object):
                 'host': entry["host"][0],
                 'options': entry.get("config"),
                 'type': 'entry',
-                'order': entry.get("order"),
+                'order': entry.get("order", 0),
             }
 
             if len(entry["host"]) > 1:
@@ -149,9 +150,16 @@ class ConfigParser(object):
 
     def update_host(self, host, options, use_regex=False):
         for index, host_entry in enumerate(self.config_data):
-            if host_entry.get("host") == host or (use_regex and re.match(host, host_entry.get("host"))):
+            if host_entry.get("host") == host or \
+                    (use_regex and re.match(host, host_entry.get("host"))):
+
+                if 'deleted_fields' in options:
+                    deleted_fields = options.pop("deleted_fields")
+                    for deleted_field in deleted_fields:
+                        del self.config_data[index]["options"][deleted_field]
+
                 self.config_data[index]["options"].update(options)
-  
+
         return self
 
     def search_host(self, search_string):
